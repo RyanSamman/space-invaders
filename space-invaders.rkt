@@ -1,24 +1,24 @@
 ;; The first three lines of this file were inserted by DrRacket. They record metadata
 ;; about the language level of this file in a form that our tools can easily process.
 #reader(lib "htdp-beginner-abbr-reader.ss" "lang")((modname space-invaders-starter) (read-case-sensitive #t) (teachpacks ()) (htdp-settings #(#t constructor repeating-decimal #f #t none #f () #f)))
+
+;; Game/Image Libraries
 (require 2htdp/universe)
 (require 2htdp/image)
-;; Space Invaders
-
 
 ;; Constants:
-
+;; Screen Width & Height
 (define WIDTH  300)
 (define HEIGHT 500)
 
-(define INVADER-X-SPEED 1.5)  ;speeds (not velocities) in pixels per tick
+;; Speed of entities
+(define INVADER-X-SPEED 1.5)
 (define INVADER-Y-SPEED 1.5)
 (define TANK-SPEED 4)
 (define MISSILE-SPEED 10)
 
-(define HIT-RANGE 10)
-
-(define INVADE-RATE 100)
+;; Probability of an invader spawning per tick (%)
+(define INVADER-PROBABILITY 4)
 
 (define BACKGROUND (empty-scene WIDTH HEIGHT "Midnight Blue"))
 (define BLANK (rectangle WIDTH HEIGHT "outline" "black"))
@@ -36,7 +36,6 @@
 (define MISSILE (ellipse 5 15 "solid" "red"))
 (define MISSILE-WIDTH/2 (/ (image-width MISSILE) 2))
 (define MISSILE-HEIGHT/2 (/ (image-height MISSILE) 2))
-
 
 ;; Data Definitions:
 
@@ -102,9 +101,19 @@
 (define G3 (make-game (list I1 I2) (list M1 M2) T1))
 (define GE (make-game (list ) empty T0))
 
+;; =============
+;; Helper functions
 
-;; =================
-;; Functions:
+;; Tank -> Tank
+;; Swaps the direction
+(check-expect (set-dir T1 1) T1)
+(check-expect (set-dir T1 -1) T2)
+(check-expect (set-dir T2 -1) T2)
+(check-expect (set-dir T2 1) T1) 
+
+(define
+  (set-dir t dir)
+  (make-tank (tank-x t) dir))
 
 ;; Number Number Number -> Number
 (check-expect (clamp 1 10 5) 5)
@@ -119,9 +128,11 @@
         [(<= i min) min]
         [else i]))
 
+;; =================
+;; Functions:
+
 ;; Game -> Game
-;; start the world with a tank
-;; 
+;; Start the game
 (define (main g)
   (big-bang g                 ; Game
     (on-tick   tock)          ; Game -> Game
@@ -131,21 +142,27 @@
 
 ;; Game -> Game
 ;; produce the next game instance
-
 (define (tock g)
   (make-game (tick-loinvader (game-invaders g) (game-missiles g))
              (tick-lomissiles (game-missiles g) (game-invaders g))
              (tick-tank (game-tank g))))
 
+;; Tank -> Tank
+;; Generate the tank's new position
 (define (tick-tank t)
   (make-tank
    (clamp TANK-WIDTH/2 (- WIDTH TANK-WIDTH/2) (+ (tank-x t) (* TANK-SPEED (tank-dir t))))
    (tank-dir t)))
 
+;; ListOfInvader -> ListOfInvader
+;; Generate new positions for the invaders, remove invaders which were hit by missiles, and spawn new invaders
 (define (tick-loinvader loi lom)
   (cond
-    [(empty? loi) (generate-invader 6)] ; End of List
-    [(i-intersects-lom (first loi) lom) (tick-loinvader (rest loi) lom)] ; Remove if intersects a missile
+    ; End of List, try spawning a new invader
+    [(empty? loi) (generate-invader INVADER-PROBABILITY)] 
+    ; Remove the invader if it intersects a missile
+    [(i-intersects-lom (first loi) lom) (tick-loinvader (rest loi) lom)] 
+    ;; 'Bounce' the invader off the sides of the scene
     [(<= (invader-x (first loi)) 0)
      (cons
       (make-invader INVADER-WIDTH/2 (- (invader-y (first loi)) INVADER-Y-SPEED) +1)
@@ -153,33 +170,52 @@
     [(>= (invader-x (first loi)) WIDTH) (cons
       (make-invader (- WIDTH INVADER-WIDTH/2) (- (invader-y (first loi)) INVADER-Y-SPEED) -1)
       (tick-loinvader (rest loi) lom))]
+    ;; Move the invaders to their new position
     [else (cons
            (make-invader
             (+ (invader-x (first loi)) (* INVADER-X-SPEED (invader-dx (first loi))))
             (- (invader-y (first loi)) INVADER-Y-SPEED)        
             (invader-dx (first loi)))
+          ;; Recursion - repeat the process with the next invader
            (tick-loinvader (rest loi) lom))]))
 
-(define (generate-invader s) 
-  (cond [(> (random 100) 96) (cons
+
+;; Natural -> ListOfInvader
+;; interp. Generates an invader with a random x position.
+;; The probability of an invader being spawned "p" being a number between 0 and 100.
+;; Using a Sigmoid function would likely be a better approach in the future. https://en.wikipedia.org/wiki/Sigmoid_function
+(define (generate-invader p)
+; Spawn an invader with a probability of "p"
+  (cond [(> (random 100) (- 1 p)) (cons
             (make-invader 
+              ; Random X position
               (+ (random (- WIDTH (image-width INVADER))) (image-width INVADER) )
+              ; Spawn at the top of the scene
               (- HEIGHT INVADER-HEIGHT/2)
-              (if (= (random 2) 0) -1 1)) empty)] ; != 0   
+              ; Random Direction
+              (if (= (random 2) 0) -1 1)) empty)]
+        ; Don't spawn an invader
         [else empty]))
 
-;; -1 1
-
+;; Invader ListOfMissiles -> Boolean
+;; interp. Checks if the invader has intersected with any of the missiles
 (define (i-intersects-lom i lom)
-  (cond [(empty? lom) false] ;; No missile intersected
-        [(m-hit-i (first lom) i) true] ;; Intersected one missile
-        [else (i-intersects-lom i (rest lom))]))
+;; No missile intersected
+  (cond [(empty? lom) false]
+        ;; Intersected one missile
+        [(m-hit-i (first lom) i) true] 
+        ;; Recursion
+        [else (i-intersects-lom i (rest lom))])) 
 
 (define (tick-lomissiles lom loi)
   (cond
-    [(empty? lom) empty] ; End of List
-    [(> (missile-y (first lom))(- HEIGHT MISSILE-HEIGHT/2)) (tick-lomissiles (rest lom) loi)] ; Remove node if exits bounds
-    [(m-intersects-loi (first lom) loi) (tick-lomissiles (rest lom) loi)] ; Remove if intersects an invader
+    ;; End of List
+    [(empty? lom) empty]
+    ;; Remove the missile if exits the scene bounds
+    [(> (missile-y (first lom))(- HEIGHT MISSILE-HEIGHT/2)) (tick-lomissiles (rest lom) loi)] 
+    ; Remove the missile if it intersects an invader
+    [(m-intersects-loi (first lom) loi) (tick-lomissiles (rest lom) loi)]
+    ;; Generate new positions & repeat with the next via Recursion
     [else (cons
            (make-missile
             (missile-x (first lom))
@@ -187,30 +223,29 @@
            (tick-lomissiles (rest lom) loi))]))
 
 (define (m-intersects-loi m loi)
-  (cond [(empty? loi) false] ;; No invader intersected
-        [(m-hit-i m (first loi)) true] ;; Intersected one invader
+  ;; End of list - No invader intersected
+  (cond [(empty? loi) false] 
+  ;; Intersected one invader
+        [(m-hit-i m (first loi)) true]
+        ;; Repeat with the next missile
         [else (m-intersects-loi m (rest loi))]))
 
+
+;; Missile Invader -> Boolean
+;; Checks whether a missile has collided with an invader
 (check-expect (m-hit-i (make-missile 600 400) (make-invader 300 200 0)) false)
 (check-expect (m-hit-i (make-missile 300 200) (make-invader 300 200 0)) true)
 (check-expect (m-hit-i (make-missile 320 200) (make-invader 315 200 0)) true)
 (check-expect (m-hit-i (make-missile 300 220) (make-invader 300 215 0)) true)
 
-;; Missile Invader -> Boolean
 (define (m-hit-i m i)
-  (and [< (abs (- (missile-x m) (invader-x i))) INVADER-WIDTH/2]
+;; Is it within the invader image's width?
+  (and [< (abs (- (missile-x m) (invader-x i))) INVADER-WIDTH/2] 
+  ;; Is it within the invader image's height?
        [< (abs (- (missile-y m) (invader-y i))) INVADER-HEIGHT/2]))
 
-#;
-(define (fn-for-game s)
-  (make-game
-   (fn-for-loinvader (game-invaders s))
-   (fn-for-lom (game-missiles s))
-   (fn-for-tank (game-tank s))))
-
 ;; Game -> Image
-;; renders the game struct into an image
-
+;; renders the game struct into an image, by overlapping each image into the background
 #;
 (define (render g) BACKGROUND)
 
@@ -222,13 +257,13 @@
    BACKGROUND)) 
 
 ;; Tank -> Image
+;; Renders the tank onto a transparent background 'BLANK'
 (check-expect (render-tank T0)
               (overlay/align/offset "right" "bottom" TANK (- (tank-x T0) TANK-WIDTH/2) 0 BLANK))
 (check-expect (render-tank TR)
               (overlay/align/offset "right" "bottom" TANK (- (tank-x TR) TANK-WIDTH/2) 0 BLANK))
 (check-expect (render-tank TL)
               (overlay/align/offset "right" "bottom" TANK (- (tank-x TL) TANK-WIDTH/2) 0 BLANK))
-
 
 (define (render-tank t)
   (overlay/align/offset
@@ -238,6 +273,7 @@
    BLANK))
 
 ;; ListOfMissiles -> Image
+;; Renders the list of missiles recursively onto a transparent background
 (check-expect (render-missiles empty) BLANK)
 (check-expect (render-missiles (cons (make-missile MISSILE-WIDTH/2 MISSILE-HEIGHT/2) empty))
               (overlay/align/offset
@@ -267,6 +303,7 @@
 
 
 ;; ListOfInvaders -> Image
+;; Renders the list of invaders recursively into a transparent background
 (check-expect (render-invaders empty) BLANK)
 (check-expect (render-invaders (cons IBL empty))
               (overlay/align/offset
@@ -296,6 +333,9 @@
 
 ;; Game KeyEvent -> Game
 ;; Handle keys being pressed
+;; " " - Space - Makes the tank shoot a missile
+;; "a" - Move the tank left
+;; "d" - Move the tank right
 (check-expect (handle-key (make-game empty empty T1) " ") (make-game empty (list (make-missile (tank-x T1) (image-height TANK))) T1))
 (check-expect (handle-key (make-game empty empty T2)  "a") (make-game empty empty T1))
 (check-expect (handle-key (make-game empty empty T1)  "d") (make-game empty empty T2))
@@ -310,30 +350,23 @@
         [else g]))
 
 ;; Tank ListOfMissiles -> ListOfMissiles
+;; Adds a missile to the list of missiles.
+;; The new missile has a y position of the tank's image and an x position of the middle of the tank
 (check-expect (shoot-missile T1 empty) (list (make-missile (tank-x T1) (image-height TANK))))
 
 (define (shoot-missile t lom)
   (cons (make-missile (tank-x t) (image-height TANK)) lom))
-
-;; Tank -> Tank
-;; Swaps the direction
-(check-expect (set-dir T1 1) T1)
-(check-expect (set-dir T1 -1) T2)
-(check-expect (set-dir T2 -1) T2)
-(check-expect (set-dir T2 1) T1) 
-
-(define
-  (set-dir t dir)
-  (make-tank (tank-x t) dir))
 
 ;; Game -> Boolean
 ;; Checks if the game is in a state where it should stop
 (check-expect (stop? (make-game (list IREACHED) empty T0)) true)
 (check-expect (stop? G1) false)
 
-(define (stop? g) (invader-escape (game-invaders g)))
+(define (stop? g) (invader-landed (game-invaders g)))
 
-(define (invader-escape loi)
+;; ListOfInvaders -> Boolean
+;; Checks if any of the invaders has 'landed' onto the ground.
+(define (invader-landed loi)
   (cond [(empty? loi) false]
         [(< (invader-y (first loi)) INVADER-HEIGHT/2) true]
         [else (invader-escape (rest loi))]))
