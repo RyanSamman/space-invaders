@@ -1,6 +1,6 @@
 ;; The first three lines of this file were inserted by DrRacket. They record metadata
 ;; about the language level of this file in a form that our tools can easily process.
-#reader(lib "htdp-beginner-abbr-reader.ss" "lang")((modname space-invaders-starter) (read-case-sensitive #t) (teachpacks ()) (htdp-settings #(#t constructor repeating-decimal #f #t none #f () #f)))
+#reader(lib "htdp-beginner-abbr-reader.ss" "lang")((modname space-invaders) (read-case-sensitive #t) (teachpacks ()) (htdp-settings #(#t constructor repeating-decimal #f #t none #f () #f)))
 
 ;; Game/Image Libraries
 (require 2htdp/universe)
@@ -18,7 +18,7 @@
 (define MISSILE-SPEED 10)
 
 ;; Probability of an invader spawning per tick (%)
-(define INVADER-PROBABILITY 4)
+(define INVADER-PROBABILITY 1)
 
 (define BACKGROUND (empty-scene WIDTH HEIGHT "Midnight Blue"))
 (define BLANK (rectangle WIDTH HEIGHT "outline" "black"))
@@ -369,6 +369,6 @@
 (define (invader-landed loi)
   (cond [(empty? loi) false]
         [(< (invader-y (first loi)) INVADER-HEIGHT/2) true]
-        [else (invader-escape (rest loi))]))
+        [else (invader-landed (rest loi))]))
 
 (main G1)
