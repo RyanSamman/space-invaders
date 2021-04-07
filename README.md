@@ -2,4 +2,6 @@
 
 My Take on Space Invaders. 
 
-<video src="./alotofbullets4.mp4" alt="Example video showcasing the game">
+<center>
+<img src="./space-invaders.gif" alt="Example video showcasing the game">
+</center>
