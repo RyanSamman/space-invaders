@@ -14,3 +14,9 @@ To thoroughly create tests with Object Oriented Programming, you need to go thro
 
 ## Art
 I like to create my own assets for the things I create, so I used [Asperite](https://www.aseprite.org/) to create the pixel art used.
+
+<center>
+
+<img src="./Asperite.png" alt="Asperite Images">
+
+</center>
